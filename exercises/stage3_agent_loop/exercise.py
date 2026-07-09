@@ -61,8 +61,6 @@ def execute(name: str, args: dict) -> str:
 
 def run_agent(client, task: str) -> str:
     """让模型在循环里自主多步完成任务，返回它最终的文字回答。"""
-    # ↓↓↓ 开始写之前，先删掉下面这行"保险丝"（防止没写完时空循环反复请求烧配额）↓↓↓
-    raise NotImplementedError("请完成 run_agent() 里的 4 个 TODO（写完删掉这一行 raise）")
 
     messages = [{"role": "user", "content": task}]
     final_text = ""
@@ -87,19 +85,25 @@ def run_agent(client, task: str) -> str:
         #     - 把这一轮的文字取出来存进 final_text
         #       （取法同阶段 2：next((b.text for b in resp.content if b.type == "text"), "")）
         #     - 然后 break 跳出循环
-        pass
+        if resp.stop_reason != "tool_use":
+            final_text = next((b.text for b in resp.content if b.type == "text"), "")
+            break
 
         # TODO 2: 模型这条"要调工具"的回复要进历史（否则下一轮它就忘了自己要调什么）。
         #   把 resp.content 作为一条 role="assistant" 的消息追加进 messages。
-
+        messages.append({"role": "assistant", "content": resp.content})
         # TODO 3: 遍历 resp.content 里所有 block，挑出 block.type == "tool_use" 的：
         #     - 用 execute(block.name, block.input) 执行，拿到结果
         #     - 组装成 {"type": "tool_result", "tool_use_id": block.id, "content": 结果}
         #   全部收集进一个列表，命名为 results。
-
+        results = []
+        for b in resp.content:
+            if b.type == "tool_use":
+                result = execute(b.name, b.input)
+                results.append({"type": "tool_result", "tool_use_id": b.id, "content": result})
         # TODO 4: 把 results 作为一条 role="user" 的消息追加进 messages。
         #   追加完，while 会自动回到顶部，带着新结果再问模型 —— 这就是 agent loop 在转。
-
+        messages.append({"role": "user", "content": results})
     return final_text
 
 
