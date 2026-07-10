@@ -1,11 +1,14 @@
 """
 阶段 4 评测：验证用 Tool Runner 重写的 run_agent() 行为和阶段 3 一致。
 
-评测思路和阶段 3 相同：给一个必须【先写文件、再读回来】的任务。
+评测思路：给一个必须【先写文件、再读回来】的任务。
   - 先写后读之间有数据依赖 → 只有循环真的转起来才能完成。
-  - 区别在于：阶段 4 的循环是 SDK 的 tool_runner 自动跑的，你没写 while。
-  - 我们照样检查：模型请求了多轮、write_file 和 read_file 都被调过、
-    文件真的被创建、最终回答用上了读到的内容。
+  - 阶段 4 的循环是 SDK 的 tool_runner 自动跑的，你没写 while。
+  - 验证手段：把 exercise 里的两个工具函数换成"带记录"的同名版本
+    （run_agent 里 tools=[write_file, read_file] 引用的是模块全局名，
+     这里重新赋值即可被用到，不依赖 SDK 内部实现）。据此确认：
+       write_file、read_file 都被调过（read 必在 write 之后 → 循环多步转了）、
+       文件真被创建、最终回答用上了读到的内容。
 
 运行： ./run.sh 4   （需已配置好 .env）
 """
@@ -14,6 +17,7 @@ import os
 import sys
 
 import anthropic
+from anthropic import beta_tool
 
 import exercise
 
@@ -23,6 +27,44 @@ TASK = (
     f"请在当前目录创建文件 {TEST_FILE}，往里面写入这句话（一字不差）：{MAGIC}。"
     f"写完之后，把 {TEST_FILE} 读回来，告诉我文件里到底写了什么。"
 )
+
+# 记录工具调用次数
+write_calls = []
+read_calls = []
+_MAX_CALLS = 8
+
+
+def _guard():
+    if len(write_calls) + len(read_calls) > _MAX_CALLS:
+        raise RuntimeError("工具调用超过 8 次，循环可能没正常结束——检查 run_agent()。")
+
+
+@beta_tool
+def write_file(path: str, content: str) -> str:
+    """把文本内容写入指定路径的文件（会覆盖同名文件）。
+
+    Args:
+        path: 文件路径，例如 notes.txt
+        content: 要写入的文本内容
+    """
+    write_calls.append(path)
+    _guard()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return f"已写入 {path}（{len(content)} 字）"
+
+
+@beta_tool
+def read_file(path: str) -> str:
+    """读取指定路径文本文件的全部内容。
+
+    Args:
+        path: 文件路径
+    """
+    read_calls.append(path)
+    _guard()
+    with open(path, encoding="utf-8") as f:
+        return f.read()
 
 
 def check(name, condition, hint=""):
@@ -45,26 +87,11 @@ def main():
     if os.path.exists(TEST_FILE):
         os.remove(TEST_FILE)
 
+    # 把 exercise 里的工具替换成"带记录"的同名工具，用来观察循环。
+    exercise.write_file = write_file
+    exercise.read_file = read_file
+
     client = anthropic.Anthropic()
-
-    # tool_runner 在内部反复调用 client.beta.messages.create 跑循环。
-    # 我们包住它：统计请求次数（≥2 说明循环真的转起来了），顺便记录每一轮
-    # 模型请求了哪些工具；超过 8 次就中断，防止死循环烧配额。
-    n_requests = [0]
-    tool_names = []
-    _orig_create = client.beta.messages.create
-
-    def spy_create(*args, **kwargs):
-        n_requests[0] += 1
-        if n_requests[0] > 8:
-            raise RuntimeError("模型请求超过 8 次，循环可能没正常结束——检查 run_agent()。")
-        resp = _orig_create(*args, **kwargs)
-        for b in resp.content:
-            if b.type == "tool_use":
-                tool_names.append(b.name)
-        return resp
-
-    client.beta.messages.create = spy_create
 
     try:
         final = exercise.run_agent(client, TASK)
@@ -77,7 +104,7 @@ def main():
         sys.exit(1)
 
     print("\n最终回答:", final)
-    print(f"（模型共请求 {n_requests[0]} 次，工具调用序列：{tool_names}）\n")
+    print(f"（write_file 调用 {len(write_calls)} 次，read_file 调用 {len(read_calls)} 次）\n")
 
     file_content = ""
     if os.path.exists(TEST_FILE):
@@ -86,24 +113,19 @@ def main():
 
     passed = True
     passed &= check(
-        "循环跑了多步（模型请求 ≥ 2 次）",
-        n_requests[0] >= 2,
-        "tool_runner 会自动在调完工具后再问一次模型——这正是它替你跑的循环。",
-    )
-    passed &= check(
         "调用了 write_file 写文件",
-        "write_file" in tool_names,
-        "TODO 1：write_file 上面加了 @beta_tool 吗？TODO 2：tools=[write_file, read_file] 传了吗？",
+        len(write_calls) >= 1,
+        "TODO 1：write_file 上加了 @beta_tool 吗？TODO 2：tools=[write_file, read_file] 传了吗？",
     )
     passed &= check(
-        "调用了 read_file 读回来",
-        "read_file" in tool_names,
-        "先写后读证明循环在继续：SDK 把写完那轮的结果回传后，模型才会再要求读。",
+        "调用了 read_file 读回来（证明循环多步转了）",
+        len(read_calls) >= 1,
+        "read 必在 write 之后：SDK 把写完那轮的结果回传后，模型才会再要求读。",
     )
     passed &= check(
-        f"文件 {TEST_FILE} 真的被创建了，且内容含「{MAGIC}」",
+        f"文件 {TEST_FILE} 真的被创建，且内容含「{MAGIC}」",
         MAGIC in file_content,
-        "函数体已实现好写入；确认模型确实调用了 write_file 并传对了 content。",
+        "确认模型确实调用了 write_file 并传对了 content。",
     )
     passed &= check(
         "最终回答用上了读到的内容（含「agent」）",

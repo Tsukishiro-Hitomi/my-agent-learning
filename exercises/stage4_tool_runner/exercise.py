@@ -37,6 +37,7 @@ MODEL = os.environ.get("MODEL", "anthropic/claude-haiku-4.5")
 #   加完后，write_file / read_file 就从普通函数变成了"工具"，可以直接交给 tool runner。
 
 
+@beta_tool
 def write_file(path: str, content: str) -> str:
     """把文本内容写入指定路径的文件（会覆盖同名文件）。
 
@@ -49,6 +50,7 @@ def write_file(path: str, content: str) -> str:
     return f"已写入 {path}（{len(content)} 字）"
 
 
+@beta_tool
 def read_file(path: str) -> str:
     """读取指定路径文本文件的全部内容。
 
@@ -70,7 +72,7 @@ def run_agent(client, task: str) -> str:
     #       messages=[{"role": "user", "content": task}],
     #   把返回值存进变量 runner。
     #   注意：这一步不会真的发请求，只是把循环"准备好"，真正跑起来是在下面的遍历里。
-
+    runner = client.beta.messages.tool_runner(model = MODEL, max_tokens = 1024, tools = [write_file, read_file], messages = [{"role": "user", "content": task}])
     # TODO 3：遍历 runner 拿到最终回答。
     #   runner 是可迭代的：每迭代一次给你一条 message（模型这一轮的完整回复）。
     #   SDK 已经在背后替你做了阶段 3 的那套：看到 tool_use 就执行工具、回传 tool_result、再问模型。
@@ -81,7 +83,17 @@ def run_agent(client, task: str) -> str:
     #               if b.type == "tool_use": → print(f"🔧 调用 {b.name}({b.input})")
     #   循环自然结束时（模型不再要工具），final_text 里就是最后那句回答。
     #   最后 return final_text。
-
+    final_text = ""
+    for message in runner:
+        for b in message.content:
+            if b.type == "text":
+                print("🤖", b.text)
+                final_text = b.text
+            if b.type == "tool_use":
+                print(f"🔧 调用 {b.name}({b.input})")
+    return final_text
+                      
+                
     raise NotImplementedError("请完成 run_agent() 里的 TODO 2、3（先删掉这行保险丝）")
 
 
