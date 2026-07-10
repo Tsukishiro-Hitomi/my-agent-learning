@@ -25,6 +25,11 @@ fi
 if [[ "$ARG" =~ ^[0-9]+$ ]]; then
   STAGE="$(ls -d "$PROJECT_DIR/exercises/stage${ARG}_"* 2>/dev/null | head -n1 | xargs -r basename)"
   STAGE="${STAGE:-stage${ARG}_unknown}"
+# 也允许传子阶段号：6.1 -> stage6_1_*
+elif [[ "$ARG" =~ ^[0-9]+\.[0-9]+$ ]]; then
+  PREFIX="stage${ARG//./_}"
+  STAGE="$(ls -d "$PROJECT_DIR/exercises/${PREFIX}_"* 2>/dev/null | head -n1 | xargs -r basename)"
+  STAGE="${STAGE:-${PREFIX}_unknown}"
 else
   STAGE="$ARG"
 fi

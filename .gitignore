@@ -11,3 +11,4 @@ __pycache__/
 # 练习产生的临时文件
 todo.txt
 agent_demo.txt
+memory.json

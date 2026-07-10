@@ -298,7 +298,7 @@ for message in runner:
 
 ## 阶段 6 · 让 agent 更强、更可靠（进阶：拆成 5 个可动手的小关）
 
-你已经会从零搭一个完整 agent 了。阶段 6 不再"理解为主"——**每一关都在你阶段 5 的代码库 agent 上加一个真实能力**。按下面推荐顺序做，每关都有 ✅ 验证。想动手时挑一个说一声，我照阶段 5 的形式给你出「练习骨架 + 评测」（`exercise.py` + `test.py` + `README` + `./run.sh 6`）。
+你已经会从零搭一个完整 agent 了。阶段 6 不再"理解为主"——**每一关都在你阶段 5 的代码库 agent 上加一个真实能力**。按下面推荐顺序做，每关都有 ✅ 验证。**这 5 关的练习 + 评测都已备好**，和前面一样是"你写代码、评测打分"，用 `./run.sh 6.1` ~ `./run.sh 6.5` 运行（评测都分「离线不花钱」+「在线端到端」两段）。
 
 推荐顺序（一句话目标）：
 - [ ] 6.1 记忆 / 持久化 —— 让 agent 跨会话记住东西（热身，最快见效）
@@ -335,7 +335,7 @@ for message in runner:
 
 > 还有一个按需了解、不必动手的话题：**上下文管理 / compaction**——对话太长会超出上下文窗口，框架会自动把旧历史压缩成摘要。做多 agent 或长对话遇到瓶颈时再看。
 
-建议从 **6.1（热身）** 或直接 **6.2（多 Agent，最过瘾）** 开始。挑一个告诉我，我就给你搭好这一关的练习和评测。
+建议从 **6.1（热身）** 开始，按顺序做到 **6.5**。每关目录：`exercises/stage6_1_memory` … `exercises/stage6_5_guardrails`。卡住随时找我要"一点提示"。
 
 ---
 
@@ -344,3 +344,4 @@ for message in runner:
 - 便宜练手模型：`claude-haiku-4-5`；复杂 agent 任务：`claude-opus-4-8`
 - 关键心智模型：API 无状态 → 每轮发完整历史；agent = LLM + 工具 + 循环
 - 起步文件建议：`hello.py`(阶段0) → `chat.py`(阶段1) → `tool_use.py`(阶段2) → `agent.py`(阶段3)
+- 远端 github 仓库： https://github.com/Tsukishiro-Hitomi/my-agent-learning.git
