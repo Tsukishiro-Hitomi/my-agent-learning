@@ -90,10 +90,10 @@ TOOLS = [
 # ============================================================================
 # 子 agent 的"人设"：告诉它自己是谁、该怎么干。
 RESEARCHER_SYSTEM = "你是调研员，用文件工具探索项目、把关键信息如实收集回来。项目根目录是 sandbox。"  # 例：你是调研员，用文件工具探索项目、把关键信息如实收集回来。项目根目录是 sandbox。
-WRITER_SYSTEM = "你是写手，把给你的笔记整理成通顺、条理清楚的中文，不要自己编事实。"      # 例：你是写手，把给你的笔记整理成通顺、条理清楚的中文，不要自己编事实。
+WRITER_SYSTEM = "你是写手，把给你的笔记/要求整理成通顺、条理清楚的中文，不要自己编事实。请务必精炼：全文控制在 1500 字以内，代码只给关键片段（不要逐个文件贴完整实现），并在一次回复内写完整、不要写到一半。"      # 例：你是写手，把给你的笔记整理成通顺、条理清楚的中文，不要自己编事实。
 
 # 协调者的"分工说明"：告诉它手上有 researcher / writer 两个下属，遇到复合任务要先调研、再写作。
-ORCHESTRATOR_SYSTEM = "手上有 researcher / writer 两个下属 agent ，前者可以通过文件工具探索项目，返回关键信息；后者可以将关键信息整理为通顺中文。遇到任务时先调用前者收集信息，再调用后者写作。"
+ORCHESTRATOR_SYSTEM = "手上有 researcher / writer 两个下属 agent ，前者可以通过文件工具探索项目，返回关键信息；后者可以将关键信息整理为通顺中文。遇到任务时先调用前者收集信息，再调用后者写作。注意必须把 researcher 返回的内容原样输入 instruction。在 writer 写完后，把 writer 返回的全部内容一字不改地作为你的最终回复输出：不要总结、不要精简、不要增删改写，也不要加开场白或结尾。"
 
 
 # ============================================================================
@@ -123,14 +123,13 @@ def agent_loop(task: str, system: str, tools: list, execute_fn, max_steps: int =
     messages = [{"role": "user", "content": task}]
     final_text = ""
     for _ in range(max_steps):
-        kwargs = dict(model=MODEL, max_tokens=1024, system=system, messages=messages)
+        kwargs = dict(model=MODEL, max_tokens=8192, system=system, messages=messages)
         if tools:
             kwargs["tools"] = tools
         resp = client.messages.create(**kwargs)
         if resp.stop_reason != "tool_use":
             final_text = next((b.text for b in resp.content if b.type == "text"), "")
             break
-        print(resp.content)
         messages.append({"role": "assistant", "content": resp.content})
         results = [
             {"type": "tool_result", "tool_use_id": b.id, "content": execute_fn(b.name, b.input)}
