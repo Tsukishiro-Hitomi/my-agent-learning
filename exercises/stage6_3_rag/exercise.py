@@ -47,9 +47,16 @@ def retrieve(query: str, top_k: int = 3) -> str:
     """
     chunks = _load_chunks()
     counts = [0] * len(chunks)
+
+    def _bigrams(s):
+        s = "".join(s.lower().split())              # 去掉所有空白
+        return {s[i:i+2] for i in range(len(s) - 1)} # 相邻两字为一个词，用 set 去重
+    
+    # 原来的逐字匹配过于粗糙。改用 bigram 方式：用二元词作匹配
+    qb = _bigrams(query)
     for i, (fn, para) in enumerate(chunks):
-        for q in query.lower():
-            counts[i] += para.lower().count(q)
+        p = para.lower()
+        counts[i] = sum(1 for b in qb if b in p)  
     
     # 获取 counts 中最大的 k 个的索引
     # 根据 key = lambda i : counts[i] 排序，倒序输出，只取前 top_k 个
