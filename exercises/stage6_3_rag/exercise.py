@@ -45,7 +45,22 @@ def retrieve(query: str, top_k: int = 3) -> str:
     评测会查：问"并发"能捞到 product.md 里含 3200 的段；问"年费"能捞到 pricing.md 含 128000 的段；
               且返回的是【相关片段的子集】，不是把所有文档原样倒出来。
     """
-    raise NotImplementedError("实现 retrieve（删掉这行）")
+    chunks = _load_chunks()
+    counts = [0] * len(chunks)
+    for i, (fn, para) in enumerate(chunks):
+        for q in query.lower():
+            counts[i] += para.lower().count(q)
+    
+    # 获取 counts 中最大的 k 个的索引
+    # 根据 key = lambda i : counts[i] 排序，倒序输出，只取前 top_k 个
+    indices = sorted((i for i in range(len(counts)) if counts[i] != 0), key=lambda i: counts[i], reverse=True)[:top_k]
+    return_chunks = [chunks[i] for i in indices]
+    if len(return_chunks) == 0:
+        return "没有找到相关资料！"
+    result = ""
+    for fn, para in return_chunks:
+        result += f"来自资料【{fn}】：{para}\n"
+    return result
 
 
 # ============================================================================
@@ -63,14 +78,19 @@ def answer_with_rag(question: str) -> str:
       3) 生成：调一次 client.messages.create(...)（带上 system=SYSTEM_PROMPT），返回模型的文字回答。
     评测会查：问一个只有 docs 里才有的事实（模型自己不可能知道），它能答对且指出来源文件。
     """
-    raise NotImplementedError("实现 answer_with_rag（删掉这行）")
-
+    context = retrieve(question)
+    content = question + "\n请根据以下资料回答，不要自己编造\n" + context
+    messages = [{"role": "user", "content": content}]
+    resp = client.messages.create(
+            model=MODEL, max_tokens=1024, system=SYSTEM_PROMPT, messages=messages,
+        )
+    return next((b.text for b in resp.content if b.type == "text"), "")
 
 # ============================================================================
 # Part C：系统提示词（你来写）
 # ============================================================================
 # 约束模型的行为：只根据给它的"资料"回答；资料里没有就说不知道，别编；回答要注明来自哪个文件。
-SYSTEM_PROMPT = ""  # 你来写
+SYSTEM_PROMPT = "只根据给你的资料回答，回答时注明资料来源的文件。资料里没有就说不知道，不准胡编乱造。"  # 你来写
 
 
 # ============================================================================
@@ -94,7 +114,9 @@ def _load_chunks() -> list:
 
 if __name__ == "__main__":
     import _trace; _trace.on()  # 观察：把模型思考痕迹写入 output.txt
+    # 第 3 个问题应该返回：“无法找到相应结果”
     for q in ["单节点最大并发连接数是多少？在哪个文件里？",
-              "企业版年费是多少？"]:
+              "企业版年费是多少？", 
+              "个人版月费是多少？"]:
         print(f"\n===== 问：{q} =====")
         print(answer_with_rag(q))
