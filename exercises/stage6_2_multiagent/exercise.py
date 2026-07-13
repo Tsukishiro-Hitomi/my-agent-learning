@@ -42,14 +42,14 @@ def researcher(question: str) -> str:
     """调研员子 agent：能用文件工具探索 sandbox、收集信息，返回它查到的内容。
     契约：调用 agent_loop，传入 question、RESEARCHER_SYSTEM、FILE_TOOLS、file_execute，返回其结果。
     """
-    raise NotImplementedError("实现 researcher（删掉这行）")
+    return agent_loop(question, RESEARCHER_SYSTEM, FILE_TOOLS, file_execute)
 
 
 def writer(instruction: str) -> str:
     """写手子 agent：不带任何工具，纯靠模型把给它的笔记/要求整理成通顺文字。
     契约：调用 agent_loop，传入 instruction、WRITER_SYSTEM、空工具列表 []、execute_fn=None，返回结果。
     """
-    raise NotImplementedError("实现 writer（删掉这行）")
+    return agent_loop(instruction, WRITER_SYSTEM, [], None)
 
 
 # ============================================================================
@@ -59,6 +59,29 @@ def writer(instruction: str) -> str:
 # ============================================================================
 TOOLS = [
     # 你来补：researcher / writer 各一份 schema
+    {
+        "name": "researcher",
+        "description": "调用文件工具探索项目，查找内容",
+        "input_schema": {
+            "type": "object", 
+            "properties": {
+                "question": {"type": "string", "description": "用户的问题"}
+            },
+            "required": ["question"],
+        }
+    }, 
+
+    {
+        "name": "writer", 
+        "description": "将笔记整理为通顺、条理清楚的中文",
+        "input_schema": {
+            "type": "object", 
+            "properties": {
+                "instruction": {"type": "string", "description": "输入的笔记"},
+            },
+            "required": ["instruction"],
+        },
+    },
 ]
 
 
@@ -66,11 +89,11 @@ TOOLS = [
 # Part C：三个 system 提示词（你来写）
 # ============================================================================
 # 子 agent 的"人设"：告诉它自己是谁、该怎么干。
-RESEARCHER_SYSTEM = ""  # 例：你是调研员，用文件工具探索项目、把关键信息如实收集回来。项目根目录是 sandbox。
-WRITER_SYSTEM = ""      # 例：你是写手，把给你的笔记整理成通顺、条理清楚的中文，不要自己编事实。
+RESEARCHER_SYSTEM = "你是调研员，用文件工具探索项目、把关键信息如实收集回来。项目根目录是 sandbox。"  # 例：你是调研员，用文件工具探索项目、把关键信息如实收集回来。项目根目录是 sandbox。
+WRITER_SYSTEM = "你是写手，把给你的笔记整理成通顺、条理清楚的中文，不要自己编事实。"      # 例：你是写手，把给你的笔记整理成通顺、条理清楚的中文，不要自己编事实。
 
 # 协调者的"分工说明"：告诉它手上有 researcher / writer 两个下属，遇到复合任务要先调研、再写作。
-ORCHESTRATOR_SYSTEM = ""
+ORCHESTRATOR_SYSTEM = "手上有 researcher / writer 两个下属 agent ，前者可以通过文件工具探索项目，返回关键信息；后者可以将关键信息整理为通顺中文。遇到任务时先调用前者收集信息，再调用后者写作。"
 
 
 # ============================================================================
@@ -82,9 +105,15 @@ def orchestrator_execute(name: str, args: dict) -> str:
           name=="writer"     → writer(args["instruction"])；
           其它 → 「错误：未知工具 …」；用 try/except 兜住异常（同阶段 5）。
     """
-    raise NotImplementedError("实现 orchestrator_execute（删掉这行）")
-
-
+    try:
+        if name == "researcher":
+            return researcher(args["question"])
+        if name == "writer":
+            return writer(args["instruction"])
+        return f"错误：未知工具 {name}"
+    except Exception as e:
+        return f"错误：在调用{name}时发生了错误{e}"
+    
 # ============================================================================
 # ↓↓↓ 以下都已给好——不用改 ↓↓↓
 # ============================================================================
@@ -101,6 +130,7 @@ def agent_loop(task: str, system: str, tools: list, execute_fn, max_steps: int =
         if resp.stop_reason != "tool_use":
             final_text = next((b.text for b in resp.content if b.type == "text"), "")
             break
+        print(resp.content)
         messages.append({"role": "assistant", "content": resp.content})
         results = [
             {"type": "tool_result", "tool_use_id": b.id, "content": execute_fn(b.name, b.input)}
@@ -150,5 +180,6 @@ def run_orchestrator(task: str) -> str:
 
 
 if __name__ == "__main__":
+    import _trace; _trace.on()  # 观察：把模型思考痕迹写入 output.txt
     print("\n===== 协调者最终产出 =====")
-    print(run_orchestrator("请研究 sandbox 这个项目，然后写一段简短介绍给新同事。"))
+    print(run_orchestrator("请研究 sandbox 这个项目，然后请为我设计一个补全业务代码的方案。"))

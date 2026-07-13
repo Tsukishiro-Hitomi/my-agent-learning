@@ -169,6 +169,7 @@ def run_agent(client, task: str) -> str:
 #   python3 exercise.py "我叫小明，在做一个叫订单服务的项目"   ← 第一次：告诉它
 #   python3 exercise.py "我叫什么？在做什么项目？"              ← 第二次(新进程)：它还记得
 if __name__ == "__main__":
+    import _trace; _trace.on()  # 观察：把模型思考痕迹写入 output.txt
     import sys
 
     client = anthropic.Anthropic()

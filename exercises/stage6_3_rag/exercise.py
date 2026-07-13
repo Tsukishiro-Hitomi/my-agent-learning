@@ -93,6 +93,7 @@ def _load_chunks() -> list:
 
 
 if __name__ == "__main__":
+    import _trace; _trace.on()  # 观察：把模型思考痕迹写入 output.txt
     for q in ["单节点最大并发连接数是多少？在哪个文件里？",
               "企业版年费是多少？"]:
         print(f"\n===== 问：{q} =====")

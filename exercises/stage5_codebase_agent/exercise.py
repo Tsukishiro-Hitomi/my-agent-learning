@@ -264,6 +264,7 @@ def run_agent(client, task: str) -> str:
 
 # 手动试玩（可选）：set -a && source ../../.env && set +a && python3 exercise.py
 if __name__ == "__main__":
+    import _trace; _trace.on()  # 观察：把模型思考痕迹写入 output.txt
     client = anthropic.Anthropic()
 
     # 试玩不同的 task 并观察模型输出：

@@ -12,3 +12,5 @@ __pycache__/
 todo.txt
 agent_demo.txt
 memory.json
+# 追踪工具产物（观察用，不入库）
+output.txt

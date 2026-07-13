@@ -86,6 +86,7 @@ def demo_agent(question: str) -> str:
 
 
 if __name__ == "__main__":
+    import _trace; _trace.on()  # 观察：把模型思考痕迹写入 output.txt
     print("用关键词判分跑一遍：")
     print(run_evals(demo_agent, judge=judge_keyword))
     # 想体验 LLM-as-judge，把上面换成： run_evals(demo_agent, judge=judge_llm)

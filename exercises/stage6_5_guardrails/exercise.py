@@ -139,6 +139,7 @@ def run_agent(client, task: str) -> str:
 
 
 if __name__ == "__main__":
+    import _trace; _trace.on()  # 观察：把模型思考痕迹写入 output.txt
     client = anthropic.Anthropic()
     with open("guard_demo.txt", "w", encoding="utf-8") as f:
         f.write("这是一个演示文件。")

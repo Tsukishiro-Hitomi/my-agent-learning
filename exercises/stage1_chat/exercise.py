@@ -42,6 +42,7 @@ class Chatbot:
 
 # 手动试玩（可选）：python exercise.py
 if __name__ == "__main__":
+    import _trace; _trace.on()  # 观察：把模型思考痕迹写入 output.txt
     bot = Chatbot()
     while True:
         text = input("你: ")
