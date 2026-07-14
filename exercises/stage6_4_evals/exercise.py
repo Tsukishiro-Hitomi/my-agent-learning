@@ -31,7 +31,11 @@ client = anthropic.Anthropic()
 # 每条一个 dict：{"question": 问题, "expect": 正确答案里应出现的关键词}。至少 5 条。
 # 建议选"答案明确、好判分"的题，例如常识题（首都、简单算术、名著人物…）。
 TEST_CASES = [
-    # {"question": "中国的首都是哪座城市？", "expect": "北京"},
+    {"question": "中国的首都是哪座城市？", "expect": "北京"},
+    {"question": "复旦大学的建校时间？", "expect": "1905"},
+    {"question": "目前哪个足球运动员获得了最多次金球奖？", "expect": "梅西"},
+    {"question": "5 + (6 / 3) * 4 = ?", "expect": "13"}, 
+    {"question": "《红楼梦》中的金陵十二钗分别是谁？", "expect": "林黛玉，薛宝钗，贾元春，贾迎春，贾探春，贾惜春，史湘云，李纨，王熙凤，巧姐，妙玉，秦可卿"}
 ]
 
 
@@ -42,7 +46,9 @@ TEST_CASES = [
 
 def judge_keyword(question: str, answer: str, expect: str) -> bool:
     """最朴素的判分：answer 里是否包含关键词 expect。（不看 question，只看关键词。）"""
-    raise NotImplementedError("实现 judge_keyword（删掉这行）")
+    if expect in answer:
+        return True
+    return False
 
 
 def judge_llm(question: str, answer: str, expect: str) -> bool:
@@ -55,8 +61,13 @@ def judge_llm(question: str, answer: str, expect: str) -> bool:
     为什么要它：很多答案关键词对不上但意思对（同义、换算、改写），关键词判分会误杀，
                让模型来判更接近人的判断。
     """
-    raise NotImplementedError("实现 judge_llm（删掉这行）")
-
+    prompt = f"请你判断对于问题“{question}”来说，代判的答案“{answer}”是否涵盖了回答关键词“{expect}”? 请只用是/否回答。"
+    resp = client.messages.create(model=MODEL, messages=[{"role": "user", "content": prompt}], max_tokens=1024)
+    judge = next((b.text for b in resp.content if b.type == "text"), "")
+    if judge == "是":
+        return True
+    else:
+        return False
 
 # ============================================================================
 # Part D：评估主循环（你来写）
@@ -73,7 +84,16 @@ def run_evals(agent_fn, judge=None) -> dict:
       - 返回 {"passed": 通过数, "total": 总数, "rate": 通过率(0~1 的小数)}。
     评测会查：统计数对得上（拿一个"故意对一半"的假 agent 来数）。
     """
-    raise NotImplementedError("实现 run_evals（删掉这行）")
+    passed = 0
+    for test in TEST_CASES:
+        question = test["question"]
+        expect = test["expect"]
+        ans = agent_fn(question)
+        ok = judge(question, ans, expect)
+        if ok:
+            passed += 1
+    return {"passed": passed, "total": len(TEST_CASES), "rate": passed / len(TEST_CASES)}
+
 
 
 # ============================================================================
@@ -87,6 +107,8 @@ def demo_agent(question: str) -> str:
 
 if __name__ == "__main__":
     import _trace; _trace.on()  # 观察：把模型思考痕迹写入 output.txt
-    print("用关键词判分跑一遍：")
-    print(run_evals(demo_agent, judge=judge_keyword))
+    # print("用关键词判分跑一遍：")
+    # print(run_evals(demo_agent, judge=judge_keyword))
+    print("用 llm 判分跑一遍：")
+    print(run_evals(demo_agent, judge=judge_llm))
     # 想体验 LLM-as-judge，把上面换成： run_evals(demo_agent, judge=judge_llm)
