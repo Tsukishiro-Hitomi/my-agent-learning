@@ -27,7 +27,7 @@ MODEL = os.environ.get("MODEL", "anthropic/claude-haiku-4.5")
 # ============================================================================
 # 下面给好的工具有：read_file（只读，安全）、write_file（会改文件）、delete_file（会删文件）。
 # 把"会改动/删除东西"的那些工具名放进这个集合。
-DANGEROUS = set()  # 你来填，例如 {"write_file", "delete_file"}
+DANGEROUS = set({"write_file", "delete_file"})  # 你来填，例如 {"write_file", "delete_file"}
 
 
 # ============================================================================
@@ -43,7 +43,11 @@ def confirm(name: str, args: dict) -> bool:
       - 提示语里要说清楚【要执行什么工具、参数是什么】，让用户知道自己在批准什么。
       - 用户输入 y / yes / 是 → True；其它 → False。
     """
-    raise NotImplementedError("实现 confirm（删掉这行）")
+    prompt = f"我需要使用{name}工具，参数为{args}。如果同意，请输入""y / yes / 是""；否则请输入""n / not / 否"":\n"
+    input = _ask(prompt)
+    if input == "y" or input == "yes" or input == "是":
+        return True
+    return False
 
 
 # ============================================================================
@@ -62,7 +66,14 @@ def guarded_execute(name: str, args: dict) -> str:
       - 工具本就不危险（或已获同意）：调 _run_tool(name, args) 真正执行。
       - 用 try/except 兜住异常（同阶段 5 的 execute）。
     """
-    raise NotImplementedError("实现 guarded_execute（删掉这行）")
+    if name in DANGEROUS:
+        _confirm = confirm(name, args)
+        if not _confirm:
+            return f"错误：用户拒绝执行{name}"
+    try:
+        return _run_tool(name, args)
+    except Exception as e:
+        return f"错误：在执行{name}时遇到异常{e}"
 
 
 # ============================================================================
@@ -110,7 +121,8 @@ TOOLS = [
      "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}},
 ]
 
-SYSTEM_PROMPT = "你是一个文件助手，可以按用户要求读、写、删文件。"
+# 增加限制：否则模型会产生幻觉，编造除“用户拒绝执行”之外其他的失败理由
+SYSTEM_PROMPT = "你是一个文件助手，可以按用户要求读、写、删文件。当用户返回错误原因时，如实反馈，不得自己编造。"
 MAX_STEPS = 10
 
 
@@ -121,11 +133,6 @@ def run_agent(client, task: str) -> str:
     for _ in range(MAX_STEPS):
         resp = client.messages.create(
             model=MODEL, max_tokens=1024, system=SYSTEM_PROMPT, tools=TOOLS, messages=messages)
-        for b in resp.content:
-            if b.type == "text":
-                print("🤖", b.text)
-            if b.type == "tool_use":
-                print(f"🔧 调用 {b.name}({b.input})")
         if resp.stop_reason != "tool_use":
             final_text = next((b.text for b in resp.content if b.type == "text"), "")
             break
